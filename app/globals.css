@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0a0f1e;
+  --surface: #111827;
+  --surface-hover: #1f2937;
+  --border: #1f2937;
+  --border-light: #374151;
+  --accent: #3b82f6;
+  --accent-dark: #2563eb;
+  --accent-glow: rgba(59, 130, 246, 0.15);
+  --text: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #4b5563;
+  --positive: #10b981;
+  --positive-bg: rgba(16, 185, 129, 0.1);
+  --negative: #ef4444;
+  --negative-bg: rgba(239, 68, 68, 0.1);
+  --neutral: #6b7280;
+  --neutral-bg: rgba(107, 114, 128, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: "Noto Sans KR", "Pretendard", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border-light);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes progress-bar {
+  0%   { left: -35%; width: 35%; }
+  100% { left: 100%; width: 35%; }
+}
+.progress-bar {
+  position: relative;
+  overflow: hidden;
+  background: var(--border);
+  height: 3px;
+  border-radius: 2px;
+}
+.progress-bar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: var(--accent);
+  animation: progress-bar 1.2s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+  animation: fade-in 0.4s ease-out both;
+}
