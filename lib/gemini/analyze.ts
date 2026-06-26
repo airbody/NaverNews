@@ -64,73 +64,62 @@ export function getGeminiUserMessage(err: unknown): string {
 
 // ─── Prompt ────────────────────────────────────────────────────────────────
 
+// Send at most 20 articles to Gemini to keep output token usage predictable
+const MAX_ARTICLES_FOR_PROMPT = 20;
+// Truncate each description to avoid bloating the prompt
+const MAX_DESC_CHARS = 80;
+
 function buildPrompt(query: string, articles: NewsArticle[]): string {
-  const articleList = articles
-    .map(
-      (a, i) =>
-        `[${i + 1}] 제목: ${a.title}\n    요약: ${a.description}\n    날짜: ${a.pubDate}\n    출처: ${a.source}`,
-    )
-    .join('\n\n');
+  const sample = articles.slice(0, MAX_ARTICLES_FOR_PROMPT);
+
+  const articleList = sample
+    .map((a, i) => {
+      const desc = a.description.length > MAX_DESC_CHARS
+        ? a.description.slice(0, MAX_DESC_CHARS) + '…'
+        : a.description;
+      return `[${i + 1}] ${a.title} | ${desc} | ${a.source}`;
+    })
+    .join('\n');
 
   return `
 당신은 뉴스 분석 전문가입니다.
 사용자 질문: "${query}"
+기사 ${sample.length}개를 분석해 아래 JSON을 반환하세요. 모든 텍스트는 한국어로 작성하세요.
 
-아래 ${articles.length}개의 뉴스 기사를 분석하여 JSON을 반환하세요.
-
-뉴스 기사:
 ${articleList}
 
 ---
-다음 JSON 스키마를 엄격히 따라 반환하세요. 모든 텍스트는 한국어로 작성하세요.
-
+반환할 JSON (스키마를 정확히 따를 것):
 {
-  "searchKeyword": "사용자 질문에서 추출한 핵심 검색 키워드 (2~4단어)",
-  "summary": "뉴스 전체 흐름을 3~5문장으로 요약. 어떤 이슈가 왜 주목받는지 맥락 중심으로 서술.",
+  "searchKeyword": "핵심 검색 키워드 2~4단어",
+  "summary": "전체 흐름 3문장 이내 요약",
   "keywords": [
-    {
-      "keyword": "키워드",
-      "importance": <0-100 정수, 기사 빈도+맥락 영향력 기준>,
-      "reason": "이 키워드가 중요한 이유 한 문장"
-    }
-    // 상위 7개, importance 내림차순
+    {"keyword": "키워드", "importance": 85, "reason": "중요 이유 한 문장"}
   ],
   "sentiment": {
-    "positive": <0-100 정수>,
-    "neutral": <0-100 정수>,
-    "negative": <0-100 정수>,
-    "overallTone": "전반적 분위기를 한 단어로: 긍정적 / 부정적 / 혼재 / 중립적",
-    "contextNote": "단순 긍정/부정어 매칭이 아닌, 기사 맥락을 고려한 감정 판단 근거 1~2문장"
+    "positive": 40,
+    "neutral": 35,
+    "negative": 25,
+    "overallTone": "혼재",
+    "contextNote": "맥락 기반 감정 판단 근거 한 문장"
   },
-  "positiveSummary": "긍정적 관점의 기사들을 2~3문장으로 요약. 긍정 기사가 없으면 '긍정적 관점의 기사가 없습니다.'",
-  "negativeSummary": "부정적 관점의 기사들을 2~3문장으로 요약. 부정 기사가 없으면 '부정적 관점의 기사가 없습니다.'",
+  "positiveSummary": "긍정 관점 요약 2문장. 없으면 긍정적 관점의 기사가 없습니다.",
+  "negativeSummary": "부정 관점 요약 2문장. 없으면 부정적 관점의 기사가 없습니다.",
   "trendInsights": [
-    {
-      "title": "트렌드 제목 (10자 이내)",
-      "description": "이 트렌드가 왜 중요한지 2~3문장 설명",
-      "type": "rising"
-    },
-    {
-      "title": "트렌드 제목2",
-      "description": "설명2",
-      "type": "controversy"
-    }
+    {"title": "트렌드명 8자이내", "description": "설명 2문장", "type": "rising"},
+    {"title": "트렌드명2", "description": "설명2", "type": "controversy"}
   ],
   "articles": [
-    {
-      "title": "기사 제목 (원문 그대로)",
-      "source": "출처 도메인",
-      "pubDate": "원문 pubDate 그대로",
-      "sentiment": "positive"
-    }
+    {"title": "기사제목원문", "source": "출처", "pubDate": "원문날짜", "sentiment": "positive"}
   ]
 }
 
 규칙:
-- 반드시 유효한 JSON만 반환하세요. 마크다운 코드 블록(\`\`\`)을 절대 사용하지 마세요.
-- 문자열 값 안에 큰따옴표(")를 넣을 때는 반드시 백슬래시로 이스케이프(\")하세요.
-- 문자열 값 안에 줄바꿈을 넣지 마세요. 한 줄로 작성하세요.
-- trendInsights는 정확히 3~5개, articles는 입력된 모든 기사에 대해 작성하세요.
+- 유효한 JSON만 반환. 마크다운 코드블록 금지.
+- 문자열 안 큰따옴표는 반드시 \\" 로 이스케이프.
+- 문자열 안 줄바꿈 금지.
+- keywords 5개, trendInsights 3개, articles는 입력된 ${sample.length}개 모두 포함.
+- summary, positiveSummary, negativeSummary, reason, description은 각각 100자 이내로 간결하게.
 `.trim();
 }
 
@@ -238,13 +227,17 @@ export async function buildNewsSummary(
 ): Promise<NewsSummaryResult> {
   const raw = await analyzeArticles(query, articles);
 
-  // Merge AI-assigned sentiment back with article links from the original list
+  // Gemini only processes the first MAX_ARTICLES_FOR_PROMPT articles
+  const sentimentMap = new Map(
+    (raw.articles ?? []).map((a, i) => [i, normalizeSentiment(a?.sentiment)]),
+  );
+
   const analyzedArticles = articles.map((article, i) => ({
     title: article.title,
     source: article.source,
     pubDate: article.pubDate,
     link: article.link,
-    sentiment: normalizeSentiment(raw.articles[i]?.sentiment),
+    sentiment: sentimentMap.get(i) ?? 'neutral',
   }));
 
   return {
